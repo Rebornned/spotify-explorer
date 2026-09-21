@@ -1,0 +1,27 @@
+# Ambiente virtual Python
+venv/
+.venv/
+env/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Variaveis de ambiente
+.env
+*.env
+!.env.example
+
+# Dependencias e build do Node
+node_modules/
+dist/
+
+# Arquivos de sistema e editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log

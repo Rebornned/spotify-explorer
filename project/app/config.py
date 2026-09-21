@@ -21,5 +21,7 @@ class Config:
             f"{os.getenv('DB_PORT')}/"
             f"{os.getenv('DB_NAME')}"
         )
-    SQLALCHEMY_ECHO = True
+    # Log das consultas SQL apenas em desenvolvimento.
+    # Em produção polui o log do servidor e expõe a estrutura interna do banco.
+    SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "0") == "1"
     SQLALCHEMY_TRACK_MODIFICATIONS = False

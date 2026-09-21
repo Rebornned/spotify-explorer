@@ -52,8 +52,8 @@ def listar_musicas():
     busca = request.args.get('busca', '')
     campo_busca = request.args.get('campoBusca', 'musica')  
     ordem_front = request.args.get('ordem', 'popularidade') 
-    direcao = request.args.get('direcao', 'desc').upper()
-    pagina = int(request.args.get('pagina', 1))
+    direcao = 'ASC' if request.args.get('direcao', 'desc').lower() == 'asc' else 'DESC'
+    pagina = max(1, int(request.args.get('pagina', 1) or 1))
     
     limit = 10
     offset = (pagina - 1) * limit
@@ -135,7 +135,7 @@ def listar_musicas():
 @main.route('/api/artistas')
 def listar_artistas():
     busca = request.args.get('busca', '')
-    pagina = int(request.args.get('pagina', 1))
+    pagina = max(1, int(request.args.get('pagina', 1) or 1))
     limit = 10
     offset = (pagina - 1) * limit
 
@@ -184,8 +184,8 @@ def detalhes_artista():
 def listar_generos():
     busca = request.args.get('busca', '').strip()
     ordem_front = request.args.get('ordem', 'qtdMusicas')
-    direcao = request.args.get('direcao', 'desc').upper()
-    pagina = int(request.args.get('pagina', 1))
+    direcao = 'ASC' if request.args.get('direcao', 'desc').lower() == 'asc' else 'DESC'
+    pagina = max(1, int(request.args.get('pagina', 1) or 1))
     
     limit = 10
     offset = (pagina - 1) * limit
@@ -248,7 +248,7 @@ def obter_estatisticas():
                 "artista": row["artista"],
                 "qtdMusicas": row["qtd_musicas"],
                 "qtdAlbuns": row["qtd_album"],
-                "popMedia": round(float(row["pop_media"]), i) if row["pop_media"] else 0.0
+                "popMedia": round(float(row["pop_media"]), 1) if row["pop_media"] else 0.0
             })
 
     # 2. TOP 10 GÊNEROS

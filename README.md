@@ -1,295 +1,346 @@
-﻿# 🎵 Spotify Explorer
+# Spotify Explorer
+
+Aplicação web para explorar e analisar um catálogo de 89.740 músicas, construída sobre um banco relacional MySQL normalizado até a 3FN. O projeto cobre o ciclo completo: modelagem conceitual, ETL de um dataset bruto do Kaggle, API REST em Flask, interface em React e deploy das três camadas na nuvem.
+
+Desenvolvido como trabalho final da disciplina de Banco de Dados I do Bacharelado em Ciência da Computação (UFRJ).
 
 <p align="center">
-  <img src="./app_screenshots/index_musics.png" alt="Spotify Explorer UI" width="100%">
+  <img src="./app_screenshots/index_musics.png" alt="Tela principal do Spotify Explorer" width="100%">
 </p>
 
-Sistema Web Full-Stack de alta performance para exploração, filtragem e análise estatística de dados musicais estruturado sob uma **arquitetura distribuída em 3 camadas (3-Tier)**. O projeto contempla desde a engenharia e saneamento de dados brutos de planilhas até a implantação automatizada em ambiente de nuvem.
+---
 
-Este ecossistema foi desenvolvido como **Trabalho Final da disciplina de Banco de Dados 1** no percurso acadêmico de Ciência da Computação.
+## Acesso
+
+| Camada | Link |
+| --- | --- |
+| Interface web | https://spotify-frontend-09cs.onrender.com/ |
+| API REST | https://pf-2026-1-bd-spotify.onrender.com |
+| Banco de dados | Instância MySQL gerenciada na Aiven |
+
+> **Nota sobre a demo:** o banco está em plano gratuito da Aiven e hiberna após períodos de inatividade. Se a interface carregar sem dados, a instância precisa ser reativada. As capturas de tela abaixo mostram a aplicação em funcionamento, e as instruções de execução local permitem rodar o projeto por completo com o dump do banco incluído no repositório.
 
 ---
 
-## 🔗 Acesso ao Projeto
+## O problema
 
-A aplicação encontra-se totalmente operacional e publicada nos seguintes ambientes de produção:
+O *Spotify Tracks Dataset* é distribuído como um único CSV desnormalizado de 114.000 linhas. Cada linha repete o nome do álbum, do gênero e dos artistas, e o campo `artists` agrupa vários artistas em uma só célula separados por ponto e vírgula, violando a primeira forma normal.
 
-* 🌐 **Plataforma Web (Interface):** [https://spotify-frontend-09cs.onrender.com/]
-* ⚡ **API REST (Back-end):** [https://pf-2026-1-bd-spotify.onrender.com]
-* 🗄️ **Banco de Dados (MySQL):** Instância gerenciada e distribuída na nuvem via **Aiven Cloud**.
+Nesse formato, perguntas simples ficam caras ou impossíveis: quantos artistas distintos existem, quais participam de mais faixas, qual a música mais popular de cada gênero. O objetivo do projeto foi transformar esse arquivo em um modelo relacional consultável e expor essas consultas em uma interface web.
 
 ---
 
-## 📚 Objetivos do Projeto
+## Arquitetura
 
-O escopo do trabalho exigeu a aplicação rigorosa do ciclo de vida de um sistema de banco de dados relacional:
-* [x] **Abstração Conceitual:** Elaboração do Diagrama Entidade-Relacionamento (DER).
-* [x] **Mapeamento Lógico:** Tradução para o modelo relacional e normalização estrita até a **Terceira Forma Normal (3FN)**.
-* [x] **Modelagem Física & DDL:** Construção manual de scripts SQL com restrições severas e integridade referencial.
-* [x] **Pipeline de ETL:** Saneamento, tratamento de dados nulos/duplicados e quebra de atomicidade via scripts Python.
-* [x] **Carga de Dados Dinâmica:** População assistida e sequencial das tabelas minimizando violações de chaves estrangeiras (`FK`).
-* [x] **Desenvolvimento Web Real:** Construção de uma interface moderna desacoplada consumindo queries complexas por meio de uma API RESTful.
-
----
-
-## 🌐 Arquitetura do Sistema e Deploy
-
-O projeto adota uma arquitetura descentralizada para simular de forma fiel um ambiente produtivo real de mercado:
-
-1.  **Camada de Apresentação (Frontend):** Construída em **React + Vite**, operando como uma *Single Page Application* (SPA). A interface se comunica de forma totalmente assíncrona (via `fetch`/`axios`) enviando requisições e processando payloads em formato JSON.
-2.  **Camada de Aplicação (Backend):** Uma API REST leve desenvolvida em **Python + Flask**. Utiliza o ORM **SQLAlchemy** (e o conector `PyMySQL`) como camada de persistência para isolar a lógica de negócios e as queries complexas das rotas HTTP.
-3.  **Camada de Dados (Persistência):** SGBD **MySQL** hospedado de forma gerenciada na nuvem na plataforma **Aiven**, comunicando-se remotamente com o servidor de aplicação.
-
+O sistema segue uma arquitetura em três camadas, com as três implantadas separadamente na nuvem.
 
 ```
-   [ Camada de Apresentação ]          [ Camada de Aplicação ]          [ Camada de Dados ]
-   +------------------------+          +---------------------+          +-----------------+
-   |      React + Vite      |  =====>  |    Flask REST API   |  =====>  |   MySQL Cloud   |
-   |    (Render Cloud)      |   HTTP   |    (Render Cloud)   |   TCP    |  (Aiven Cloud)  |
-   +------------------------+  <====   +---------------------+  <====   +-----------------+
-                                JSON                                     SQL / SQLAlchemy
+  [ Apresentação ]              [ Aplicação ]              [ Dados ]
+  +----------------+           +----------------+        +----------------+
+  |  React + Vite  |  ------>  |   Flask API    | -----> |  MySQL (Aiven) |
+  |    (Render)    |   HTTP    |    (Render)    |  TCP   |                |
+  +----------------+  <------  +----------------+ <----- +----------------+
+                        JSON                   SQLAlchemy / PyMySQL
 ```
+
+- **Apresentação:** SPA em React 19 com Vite. Consome a API via `fetch` e trata as respostas em JSON, sem recarregar a página.
+- **Aplicação:** API REST em Flask. Usa SQLAlchemy com o driver PyMySQL, com as consultas SQL isoladas das rotas HTTP em um módulo próprio (`queries.py`).
+- **Dados:** MySQL gerenciado na Aiven, acessado remotamente pelo servidor de aplicação.
 
 ---
 
-## 🗂️ Estrutura do Projeto
+## Modelo de dados
+
+Quatro entidades principais e uma tabela associativa:
+
+| Tabela | Registros | Papel |
+| --- | --- | --- |
+| `MUSICA` | 89.740 | faixa, com popularidade, duração e FKs para álbum e gênero |
+| `ARTISTA` | 29.858 | artista isolado a partir do campo composto original |
+| `ALBUM` | 46.589 | álbum ao qual a faixa pertence |
+| `GENERO` | 113 | gênero atribuído pelo Spotify |
+| `PARTICIPACAO` | 123.424 | associativa N:N entre música e artista, com `tipo_participacao` |
+
+A relação entre artista e música é N:N, já que uma faixa pode ter vários artistas e um artista aparece em várias faixas. Essa relação carrega o atributo `tipo_participacao`, que distingue artista principal de participação (`feat`). Os diagramas conceitual, lógico e físico estão em `/model`, e o DDL completo em `/sql/management`.
+
+---
+
+## Pipeline de ETL
+
+O tratamento do dataset é feito por scripts Python em `/scripts`, e o resultado são CSVs atômicos, um por entidade, prontos para carga.
+
+```
+114.000 linhas brutas
+  → 113.999 após remover nulos
+  →  89.740 após remover duplicatas
+```
+
+| Script | Papel |
+| --- | --- |
+| `process_dataset.py` | Análise exploratória: colunas, contagem de nulos, cardinalidade de artistas, álbuns e gêneros. Usado para entender o dataset antes de modelar. |
+| `clean_dataset.py` | Isola a etapa de limpeza e reporta o número de linhas em cada estágio, servindo como verificação dos totais. |
+| `generate_csv_tables.py` | O pipeline completo: limpa, gera as cinco tabelas, quebra o campo composto de artistas e exporta os CSVs em `/scripts_output`. |
+
+O que o pipeline faz:
+
+1. **Descarta o índice residual** (`Unnamed: 0`) do CSV original.
+2. **Remove nulos** nos campos que não podem faltar: `track_id`, `artists`, `album_name` e `track_name`.
+3. **Remove duplicatas** por `track_id`.
+4. **Deriva as dimensões:** gêneros, álbuns e artistas são deduplicados e recebem IDs sequenciais próprios, já que no CSV se repetem a cada linha.
+5. **Quebra a atomicidade:** o campo `artists` é dividido por `;`, cada artista vira uma linha em `PARTICIPACAO`, com o primeiro marcado como `principal` e os demais como `feat`.
+6. **Exporta** os cinco CSVs com todos os campos entre aspas, necessário porque nomes de músicas e álbuns contêm vírgulas.
+
+A carga no MySQL respeita a ordem de dependência das chaves estrangeiras: `GENERO` → `ALBUM` → `ARTISTA` → `MUSICA` → `PARTICIPACAO`. Fora dessa ordem, a integridade referencial rejeita as inserções.
+
+---
+
+## Funcionalidades
+
+A aplicação tem quatro telas, todas com busca, ordenação e paginação de 10 registros:
+
+- **Músicas** — lista as faixas com artista, álbum, gênero, duração formatada e popularidade. A busca aceita quatro campos (música, artista, álbum ou gênero) e a ordenação, seis.
+- **Artistas** — para cada artista, popularidade média, número de faixas e número de álbuns, com uma visão de detalhe trazendo as cinco músicas mais populares e os três álbuns de maior média.
+- **Gêneros** — quantidade de músicas, popularidade média e número de artistas por gênero.
+- **Estatísticas** — cinco recortes analíticos: top 10 artistas, top 10 gêneros, artistas com produção acima da média geral da base, música mais popular de cada gênero e álbuns com mais faixas.
+
+As consultas usam funções de agregação (`COUNT`, `AVG`, `MAX`), `GROUP BY` com `HAVING` e subconsultas. As sete consultas ficam em `project/app/queries.py`, e as versões standalone em `/sql/queries`.
+
+---
+
+## Decisões técnicas
+
+**Tabela associativa em vez de campo multivalorado.** Manter os artistas concatenados na tabela de músicas seria mais simples de carregar, mas inviabilizaria qualquer consulta por artista. A tabela `PARTICIPACAO` custou uma etapa a mais no ETL e gerou 123.424 linhas, e é o que permite responder "em quantas faixas este artista aparece" com um `COUNT` em vez de varredura de strings.
+
+**Busca por prefixo em vez de substring.** A barra de busca usa `LIKE 'termo%'`, não `LIKE '%termo%'`. A diferença é de uma porcentagem no código e enorme na execução: com o curinga só à direita o MySQL usa o índice da coluna; com curinga dos dois lados ele é obrigado a varrer as 89.740 linhas a cada tecla digitada. O custo é que a busca não encontra o termo no meio da palavra. Para um catálogo desse tamanho consultado remotamente, a troca compensa.
+
+**SQL parametrizado com whitelist de identificadores.** As consultas são montadas dinamicamente porque a interface permite escolher campo de busca e critério de ordenação. Valores de busca vão como parâmetros vinculados (`:search_value`), nunca concatenados. Já nomes de coluna não podem ser parametrizados por bind, então `queries.py` mantém dicionários (`SEARCH_FIELDS`, `ORDER_TYPES`) que traduzem o identificador recebido do front para o nome real da coluna e rejeitam qualquer valor fora do mapa. A direção da ordenação segue a mesma regra: só `ASC` ou `DESC` chegam à consulta. Isso mantém a flexibilidade da interface sem abrir nenhum ponto da query para entrada arbitrária.
+
+**SQL explícito em vez de ORM puro.** O SQLAlchemy é usado como camada de conexão e mapeamento, mas as consultas analíticas foram escritas diretamente em SQL. Como o objetivo da disciplina era exercitar consultas relacionais, gerar as agregações e subconsultas pelo ORM esconderia justamente o que o projeto precisava demonstrar. As consultas ficam em um módulo separado das rotas, o que mantém o SQL legível e testável isoladamente.
+
+**Paginação no banco, não na aplicação.** Cada rota executa duas consultas: uma com `LIMIT` para a página pedida e outra com `COUNT` para o total. Trazer 89.740 linhas e paginar em memória seria mais simples de escrever e inviável na prática, ainda mais com o banco em outra máquina.
+
+**Três serviços separados em vez de um monolito.** Servir o front pelo próprio Flask seria mais rápido de publicar. Separar em três serviços obrigou a lidar com CORS, variáveis de ambiente por ambiente e latência de rede entre aplicação e banco, que são problemas reais de produção e não apareceriam em uma aplicação local.
+
+**Banco gerenciado em vez de local.** Hospedar o MySQL na Aiven expôs uma questão que o ambiente local esconde: cada consulta paga o custo da rede. Isso tornou visível o peso das consultas com múltiplos `JOIN` sobre a tabela de participações e reforçou as decisões de paginar tudo no banco e manter a busca indexável.
+
+---
+
+## Tecnologias
+
+| Escopo | Ferramentas |
+| --- | --- |
+| Modelagem | brModelo, MySQL Workbench, DBeaver |
+| Banco de dados | MySQL, Aiven (serviço gerenciado) |
+| ETL | Python 3, pandas |
+| Back-end | Flask, SQLAlchemy, PyMySQL, Flask-CORS, Gunicorn |
+| Front-end | React 19, Vite, lucide-react, CSS3 |
+| Infraestrutura | Git, GitHub, Render |
+
+---
+
+## Estrutura do projeto
 
 ```text
 PF-2026.1-BD-Spotify/
 │
-├── app_concepts/              # Protótipos e conceitos visuais da interface do usuário
-├── database/                  # Dump completo do banco de dados relacional MySQL (.sql)
-│   └── spotify_db_export.sql
-├── dataset/                   # Local do arquivo CSV bruto extraído do Kaggle
-├── model/                     # Artefatos das etapas de modelagem (brModelo)
-│   ├── conceitual/            # Diagrama Entidade-Relacionamento (DER)
-│   ├── logico/                # Diagrama do Modelo Relacional
-│   └── fisico/                # Arquivos de modelo físico/mapeamento de tipos
-├── project/                   # Código-fonte principal da aplicação distribuída
-│   ├── app/                   # Back-end: Servidor Flask, Rotas API e Camada ORM
-│   │   ├── __init__.py        # Inicialização do App, instâncias do CORS e SQLAlchemy
-│   │   ├── config.py          # Gerenciamento de strings de conexão e variáveis (.env)
-│   │   ├── models.py          # Classes de mapeamento objeto-relacional (Tabelas)
-│   │   ├── queries.py         # Módulo isolado contendo as 7 Consultas SQL avançadas
-│   │   ├── routes.py          # Endpoints REST expostos para o Frontend
-│   │   └── templates/         # Página de fallback estática do Flask
-│   │       └── index.html
-│   ├── frontend/              # Front-end: SPA moderna em React + Vite + Node.js
-│   │   ├── package.json       # Manifesto de dependências e scripts Node.js
-│   │   ├── vite.config.js     # Configurações do ecossistema de build do Vite
-│   │   ├── src/               # Componentes, Abas, Páginas e Requisições da UI
-│   │   └── public/            # Ativos públicos e estáticos do cliente
-│   ├── frontend_mockup/       # Conceito estático legível de design antigo / Referência
-│   ├── .env.example           # Modelo de variáveis de ambiente para o servidor
-│   └── run.py                 # Script de inicialização do servidor de desenvolvimento Flask
-├── relatorios/                # Relatórios técnicos, parciais e documentações PDF do projeto
-├── screenshots/               # Evidências do terminal, métricas e telas em alta resolução
-├── scripts/                   # Scripts utilitários em Python para engenharia e ETL
-│   ├── process_dataset.py     # Script de engenharia, normalização e quebra N:N
-│   ├── clean_dataset.py       # Script focado em expurgar nulos e linhas duplicadas
-│   └── create_tables.py       # Automação de criação física via ORM
-├── scripts_output/            # Arquivos CSV atômicos gerados após execução do ETL
-│   ├── genero.csv
-│   ├── artista.csv
-│   ├── album.csv
-│   ├── musica.csv
-│   └── participacao.csv
-├── sql/                       # Consultas manuais auxiliares e scripts DDL puros
-└── requirements.txt           # Manifesto de dependências e bibliotecas Python do Back-end
-
+├── dataset/              # CSV bruto do Kaggle
+├── scripts/              # pipeline em Python
+│   ├── process_dataset.py        # análise exploratória do dataset
+│   ├── clean_dataset.py          # limpeza isolada, com contagem por etapa
+│   └── generate_csv_tables.py    # ETL completo: normaliza e exporta os CSVs
+├── scripts_output/       # CSVs atômicos gerados pelo ETL
+├── model/                # modelos conceitual, lógico e físico (brModelo)
+├── sql/
+│   ├── management/           # DDL: criação de banco, tabelas e importação
+│   └── queries/              # as 7 consultas em arquivos isolados
+├── database/             # dump completo do banco populado (.sql)
+├── project/
+│   ├── app/                  # back-end Flask
+│   │   ├── config.py             # conexão e variáveis de ambiente
+│   │   ├── models.py             # mapeamento ORM das cinco tabelas
+│   │   ├── queries.py            # consultas SQL e whitelists de identificadores
+│   │   └── routes.py             # endpoints REST
+│   ├── frontend/             # SPA em React + Vite
+│   │   └── src/
+│   │       ├── tabs/             # as 4 telas
+│   │       ├── components/       # tabela, busca, ordenação, paginação
+│   │       └── assets/styles/    # CSS por tela
+│   ├── frontend_mockup/      # protótipo estático anterior à SPA
+│   ├── .env.example
+│   └── run.py
+├── relatorios/           # relatório técnico do projeto
+├── screenshots/          # evidências de banco: DESCRIBE, SELECT e consultas
+├── app_screenshots/      # capturas da interface
+└── requirements.txt
 ```
 
 ---
 
-## 📊 O Dataset e a Métrica de Dados (ETL)
+## Executando localmente
 
-O projeto utilizou como ponto de partida o *Spotify Tracks Dataset* obtido via Kaggle. Originalmente, o arquivo consistia em uma única planilha gigante desnormalizada contendo **114.000 registros brutos**.
-
-Através dos scripts contidos em `/scripts`, os dados passaram por um pipeline rigoroso de higienização que mitigou falhas de atomicidade (como múltiplos artistas compactados por ponto-e-vírgula em uma única célula) e eliminou nulos/duplicatas.
-
-Após a conclusão do processo, as seguintes volumetrias foram validadas no MySQL através do comando `COUNT(*)`:
-
-* 🗂️ **Músicas Homologadas (`MUSICA`):** 89.740 registros
-* 🎤 **Artistas Isolados (`ARTISTA`):** 29.858 registros
-* 💿 **Álbuns Catalogados (`ALBUM`):** 46.589 registros
-* 🎼 **Gêneros Musicais (`GENERO`):** 113 registros
-* 🔗 **Tabela de Junção (`PARTICIPACAO`):** 123.424 relacionamentos que amparam as participações de múltiplos artistas nas canções de forma perfeitamente normalizada (3FN).
-
----
-
-## ✨ Funcionalidades e Consultas Avançadas
-
-A aplicação web expõe as seguintes regras de negócio validadas por queries relacionais avançadas mapeadas na interface:
-
-* 🎵 **Exploração de Faixas:** Busca textual parametrizada por nome da canção utilizando correspondência parcial via operador `LIKE` e tratamento do tempo de reprodução em minutos.
-* 🎤 **Dossiê do Artista:** Localização instantânea de criadores, listando de forma unificada todas as canções, álbuns e colaborações ramificadas associadas a ele.
-* 💿 **Mapeamento de Álbuns:** Recuperação das faixas que constituem um álbum de forma íntegra através de junções eficientes baseadas em chaves primárias e estrangeiras.
-* 📊 **Consultas Analíticas Avançadas:**
-* Uso expressivo de funções de agregação (`COUNT`, `AVG`, `SUM`, `MAX`).
-* Mecanismos complexos de agrupamento (`GROUP BY`) e filtragem condicional agregada (`HAVING`).
-* **Subconsultas dinâmicas** para extração de indicadores matemáticos complexos (ex: músicas mais populares de cada gênero e artistas que performam acima da média estatística geral da plataforma).
-
-
-
----
-
-## 🛠️ Tecnologias Utilizadas
-
-| Escopo | Ferramentas e Tecnologias |
-| --- | --- |
-| **Modelagem de Dados** | brModelo • MySQL Workbench • DBeaver |
-| **Camada de Dados (SGBD)** | MySQL • Aiven Cloud Managed Service |
-| **Camada de Aplicação (Backend)** | Python 3 • Flask • SQLAlchemy (ORM) • PyMySQL |
-| **Camada de Apresentação (Frontend)** | Node.js • React • Vite • HTML5 • CSS3 Moderno |
-| **Infraestrutura / Versionamento** | Git • GitHub • Render Cloud (Web Service / Static Site) |
-
----
-
-## ⚙️ Executando o Projeto Localmente
-
-### 1. Clonagem e Configuração do Repositório
+### 1. Clonar o repositório
 
 ```bash
-git clone <url-do-repositório>
+git clone https://github.com/Rebornned/PF-2026.1-BD-Spotify.git
 cd PF-2026.1-BD-Spotify
-
 ```
 
-### 2. Configuração e Inicialização do Back-end (Flask)
-
-Navegue até o diretório do projeto, inicialize o ambiente virtual isolado e instale os pacotes necessários:
+### 2. Preparar o back-end
 
 ```bash
 cd project
 python -m venv venv
-
 ```
 
-* **Ativação no Windows (PowerShell):** `venv\Scripts\Activate.ps1`
-* **Ativação no Windows (CMD):** `venv\Scripts\activate.bat`
-* **Ativação no Linux/macOS:** `source venv/bin/activate`
+Ative o ambiente virtual:
+
+- Windows (PowerShell): `venv\Scripts\Activate.ps1`
+- Windows (CMD): `venv\Scripts\activate.bat`
+- Linux/macOS: `source venv/bin/activate`
 
 Instale as dependências:
 
 ```bash
 pip install -r ../requirements.txt
-
 ```
 
-Crie o arquivo `.env` a partir do modelo estrutural:
+### 3. Configurar as variáveis de ambiente
 
 ```bash
 cp .env.example .env
-
 ```
 
-Abra o arquivo `.env` criado e insira suas credenciais de acesso local ou sua URL remota da nuvem.
-
-#### Exemplo de Configuração Local
+Para um banco local:
 
 ```env
 DB_USER=root
-DB_PASSWORD=sua_senha_local
+DB_PASSWORD=sua_senha
 DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=spotify_db
-SECRET_KEY=sua_chave_secreta_de_sessao
-
+SECRET_KEY=sua_chave_secreta
 ```
 
-#### Exemplo de Configuração Remota (Aiven)
+Para um banco remoto:
 
 ```env
-DATABASE_URL=mysql+pymysql://usuario:senha@host_aiven:porta/nome_do_banco
-SECRET_KEY=sua_chave_secreta_de_sessao
-
+DATABASE_URL=mysql+pymysql://usuario:senha@host:porta/nome_do_banco
+SECRET_KEY=sua_chave_secreta
 ```
 
-> 💡 *Nota:* Quando a variável `DATABASE_URL` está preenchida, o back-end a utiliza como prioridade absoluta para a conexão.
+Se `DATABASE_URL` estiver preenchida, ela tem prioridade sobre as variáveis individuais. Para ver as consultas SQL no console durante o desenvolvimento, defina `SQLALCHEMY_ECHO=1`.
 
-### 3. Carga do Banco de Dados Local (Caso opte por localhost)
-
-No seu cliente MySQL local, instancie o esquema de dados:
+### 4. Carregar o banco
 
 ```sql
 CREATE DATABASE spotify_db;
-
 ```
-
-Importe a estrutura e os dados limpos utilizando o arquivo disponibilizado em `/database`:
 
 ```bash
 mysql -u seu_usuario -p spotify_db < ../database/spotify_db_export.sql
-
 ```
 
-*Dica: Você também pode realizar esta importação diretamente pela ferramenta gráfica "Data Import" do MySQL Workbench.*
+O dump já contém o esquema e os dados tratados, então não é necessário rodar o ETL para usar a aplicação.
 
-### 4. Inicializando a API do Back-end
+Para reproduzir o pipeline do zero, baixe o CSV do Kaggle para `/dataset` e rode o script de dentro da própria pasta, já que os caminhos são relativos a ela:
 
-Com o ambiente virtual ativado e as variáveis ajustadas no diretório `project/`:
+```bash
+cd scripts
+python generate_csv_tables.py
+```
+
+Os CSVs gerados em `/scripts_output` podem então ser importados com os arquivos de `/sql/management`.
+
+### 5. Subir a API
 
 ```bash
 python run.py
-
 ```
 
-O backend passará a escutar chamadas REST na porta padrão: `http://127.0.0.1:5000`
+A API responde em `http://127.0.0.1:5000`.
 
-### 5. Configuração e Inicialização do Front-end (React + Vite)
+### 6. Subir o front-end
 
-Abra uma **nova janela de terminal**, acesse a pasta do cliente visual, instale os módulos do Node e levante o servidor de desenvolvimento do Vite:
+Em outro terminal:
 
 ```bash
 cd project/frontend
 npm install
 npm run dev
-
 ```
 
-O servidor local do Vite será mapeado e initialized na porta padrão: `http://127.0.0.1:5173`
+A interface fica em `http://127.0.0.1:5173`.
 
----
-
-## ⚙️ Ajustes de Comunicação do Front-end
-
-Por padrão, a interface React está configurada para mapear requisições localmente em `http://localhost:5000`. Caso deseje apontar para um endereço customizado ou para o link do deploy, crie um arquivo chamado `.env` na raiz do diretório `project/frontend/` contendo a variável correspondente:
+Por padrão o front aponta para `http://localhost:5000`. Para usar outro endereço, crie um `.env` em `project/frontend/`:
 
 ```env
-VITE_API_URL=http://seu-endereco-do-backend-no-render
-
+VITE_API_URL=http://endereco-da-api
 ```
 
 ---
 
-## 📸 Screenshots da Interface
+## Endpoints
 
-### Painel Geral de Músicas (Busca e Paginação)
+| Método | Rota | Parâmetros |
+| --- | --- | --- |
+| `GET` | `/api/musicas` | `busca`, `campoBusca`, `ordem`, `direcao`, `pagina` |
+| `GET` | `/api/artistas` | `busca`, `pagina` |
+| `GET` | `/api/artistas/detalhes` | `nome` |
+| `GET` | `/api/generos` | `busca`, `ordem`, `direcao`, `pagina` |
+| `GET` | `/api/estatisticas` | `tipo` |
+
+As rotas paginadas devolvem `{ dados, total }`, onde `total` alimenta o controle de paginação no front.
+
+---
+
+## Telas
+
+### Músicas
 
 <p align="center">
-  <img src="./app_screenshots/index_musics.png" alt="Spotify Explorer UI" width="100%">
+  <img src="./app_screenshots/index_musics.png" alt="Tela de músicas" width="100%">
 </p>
 
-### Painel Geral de Artistas (Relacionamentos e Dossiê)
+### Artistas
 
 <p align="center">
-  <img src="./app_screenshots/index_artists.png" alt="Spotify Explorer UI" width="100%">
+  <img src="./app_screenshots/index_artists.png" alt="Tela de artistas" width="100%">
 </p>
 
-### Métricas e Estatísticas Avançadas (Agregações SQL e Subqueries)
+### Gêneros
 
 <p align="center">
-  <img src="./app_screenshots/index_statistics.png" alt="Spotify Explorer UI" width="100%">
+  <img src="./app_screenshots/index_genres.png" alt="Tela de gêneros" width="100%">
+</p>
+
+### Estatísticas
+
+<p align="center">
+  <img src="./app_screenshots/index_statistics.png" alt="Tela de estatísticas" width="100%">
 </p>
 
 ---
 
-## 👥 Integrantes do Grupo
+## Minhas contribuições
 
-* 👤 **Dhemerson Sousa de Albuquerque (Autor e Desenvolvedor Principal)** 
-* 🎓 **Ricardo Augusto de Borba**
-* 🎓 **Mariana Kellen Araújo Moreira**
-* 🎓 **Pedro Salazar Pessoa Machado**
-* 🎓 **Emilly Tavares da Silva**
+Projeto acadêmico desenvolvido em grupo de cinco integrantes. Fui responsável por:
+
+- Modelagem conceitual, lógica e física do banco, e normalização até a 3FN
+- Pipeline de ETL em Python: limpeza, derivação das dimensões e quebra da relação N:N
+- Escrita das sete consultas SQL e da camada de montagem dinâmica com whitelist
+- Arquitetura e desenvolvimento da API em Flask com SQLAlchemy
+- Integração entre front-end e back-end
+- Deploy das três camadas na nuvem (Render e Aiven)
+- Estruturação do repositório e redação da documentação técnica
+
+O histórico de commits deste repositório registra o desenvolvimento.
 
 ---
+
+## Créditos
+
+Dataset: [Spotify Tracks Dataset](https://www.kaggle.com/datasets/maharshifichadia/spotify-tracks-dataset), via Kaggle.
+
+## Licença
+
+Distribuído sob a licença MIT. Veja [LICENSE](./LICENSE) para mais detalhes.
