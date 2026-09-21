@@ -141,7 +141,7 @@ As consultas usam funções de agregação (`COUNT`, `AVG`, `MAX`), `GROUP BY` c
 ## Estrutura do projeto
 
 ```text
-PF-2026.1-BD-Spotify/
+spotify-explorer/
 │
 ├── dataset/              # CSV bruto do Kaggle
 ├── scripts/              # pipeline em Python
@@ -181,8 +181,8 @@ PF-2026.1-BD-Spotify/
 ### 1. Clonar o repositório
 
 ```bash
-git clone https://github.com/Rebornned/PF-2026.1-BD-Spotify.git
-cd PF-2026.1-BD-Spotify
+git clone https://github.com/Rebornned/spotify-explorer.git
+cd spotify-explorer
 ```
 
 ### 2. Preparar o back-end
